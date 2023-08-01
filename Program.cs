@@ -11,7 +11,7 @@ namespace UserApi
             builder.Services.AddDbContext<UserDb>(o => o.UseInMemoryDatabase("Users"));
             var app = builder.Build();
 
-            app.MapPost("/upload", (HttpRequest request, UserDb db) =>
+            app.MapPost("/upload", (HttpRequest request, UserDb context) =>
             {
                 var files = request.Form.Files;
                 if (files.Count == 1 && files[0].FileName.EndsWith(".csv"))
@@ -26,30 +26,34 @@ namespace UserApi
                             string[] data = reader.ReadLine().Split(',');
                             User user = new()
                             {
-                                Id = int.Parse(data[0]),
+                                Id = Guid.Parse(data[0]),
                                 Username = data[1],
                                 Age = int.Parse(data[2]),
                                 City = data[3],
                                 Phone = data[4],
                                 Email = data[5]
                             };
-                            db.Users.Add(user);
+
+                            if (context.Users.Find(user.Id) is User found)
+                                context.Entry(found).CurrentValues.SetValues(user);
+                            else
+                                context.Users.Add(user);
                         }
                     }
 
-                    db.SaveChanges();
+                    context.SaveChanges();
                     return Results.Ok();
                 }
 
                 return TypedResults.BadRequest();
             });
 
-            app.MapGet("/users", (UserDb db, 
+            app.MapGet("/users", (UserDb db,
                 [FromQuery] string Order,
                 [FromQuery] int Count) =>
             {
                 var users = from u in db.Users
-                               select u;
+                            select u;
                 users = Order.ToLower() switch
                 {
                     "desc" => users.OrderByDescending(s => s.Username),
